@@ -157,13 +157,13 @@ class GraspVisualizer:
         hand_actor = self.gym.create_actor(env, hand_asset, hand_pose, "hand", 0, 1)
         
         # Set hand DOF positions from grasp data
-        # Assuming grasp data: [obj_pos(3), obj_quat(4), joint_angles(16)]
+        # Correct format: [joint_angles(16), obj_pos(3), obj_quat(4)]
         if self.selected_grasp.shape[0] >= 23:
             # Get hand DOF properties
             hand_dof_props = self.gym.get_actor_dof_properties(env, hand_actor)
             
-            # Set joint positions (parameters 7-22 are joint angles)
-            joint_positions = self.selected_grasp[7:23]
+            # Set joint positions (parameters 0-15 are joint angles)
+            joint_positions = self.selected_grasp[:16]
             
             # Create DOF state tensor
             num_dofs = self.gym.get_actor_dof_count(env, hand_actor)
@@ -179,17 +179,17 @@ class GraspVisualizer:
         object_pose = gymapi.Transform()
         
         # Set object position and orientation from grasp data
-        if self.selected_grasp.shape[0] >= 7:
-            # Object position (parameters 0-2)
+        if self.selected_grasp.shape[0] >= 23:
+            # Object position (parameters 16-18)
             object_pose.p = gymapi.Vec3(
-                self.selected_grasp[0],
-                self.selected_grasp[1], 
-                self.selected_grasp[2]
+                self.selected_grasp[16],
+                self.selected_grasp[17], 
+                self.selected_grasp[18]
             )
             
-            # Object orientation (parameters 3-6 as quaternion)
+            # Object orientation (parameters 19-22 as quaternion)
             # Note: Need to normalize if not already normalized
-            quat = self.selected_grasp[3:7]
+            quat = self.selected_grasp[19:23]
             quat_norm = np.linalg.norm(quat)
             if quat_norm > 0:
                 quat = quat / quat_norm
@@ -234,6 +234,9 @@ class GraspVisualizer:
         print("  P: Load previous grasp")
         print("  Q/Esc: Quit")
         print(f"\nShowing grasp {self.grasp_idx} from {self.cache_file}")
+        print(f"Data format: [joint_angles(16), obj_pos(3), obj_quat(4)]")
+        print(f"Joint angles: {self.selected_grasp[:16]}")
+        print(f"Object pose: pos={self.selected_grasp[16:19]}, quat={self.selected_grasp[19:23]}")
         
         while True:
             # Step simulation
