@@ -35,7 +35,7 @@ params:
         fixed_sigma: True
 
     mlp:
-      units: [512, 256, 128]
+      units: [512, 256, 256]
       activation: elu
       d2rl: False
 
@@ -43,14 +43,6 @@ params:
         name: default
       regularizer:
         name: None
-
-    rnn:
-      name: gru
-      units: 256
-      layers: 1
-      before_mlp: true
-      concat_input: true
-      layer_norm: true
 
   load_checkpoint: ${if:${...checkpoint},True,False} # flag which sets whether to load the checkpoint
   load_path: ${...checkpoint} # path to the checkpoint to load
