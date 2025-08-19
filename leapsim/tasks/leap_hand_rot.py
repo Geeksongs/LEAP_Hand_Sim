@@ -106,6 +106,13 @@ class LeapHandRot(VecTaskRot):
                 self.saved_grasping_states[str(s)] = torch.from_numpy(np.load(
                     f'cache/{self.grasp_cache_name}_grasp_50k_s{str(s).replace(".", "")}.npy'
                 )).float().to(self.device)
+        elif not self.randomize_scale and not self.save_init_pose:
+            # Training with fixed scale - load single scale cache
+            self.saved_grasping_states = {}
+            scale_str = str(self.base_obj_scale).replace(".", "")
+            self.saved_grasping_states[str(self.base_obj_scale)] = torch.from_numpy(np.load(
+                f'cache/{self.grasp_cache_name}_grasp_50k_s{scale_str}.npy'
+            )).float().to(self.device)
         else:
             assert self.save_init_pose
 
@@ -494,12 +501,34 @@ class LeapHandRot(VecTaskRot):
         # reset rigid body forces
         self.rb_forces[env_ids, :, :] = 0.0
 
-        num_scales = len(self.randomize_scale_list)
-        for n_s in range(num_scales):
-            s_ids = env_ids[(env_ids % num_scales == n_s).nonzero(as_tuple=False).squeeze(-1)]
-            if len(s_ids) == 0:
-                continue
-            obj_scale = self.randomize_scale_list[n_s]
+        if self.randomize_scale:
+            num_scales = len(self.randomize_scale_list)
+            for n_s in range(num_scales):
+                s_ids = env_ids[(env_ids % num_scales == n_s).nonzero(as_tuple=False).squeeze(-1)]
+                if len(s_ids) == 0:
+                    continue
+                obj_scale = self.randomize_scale_list[n_s]
+                scale_key = str(obj_scale)
+                
+                if "sampled_pose_idx" in self.cfg["env"]:
+                    sampled_pose_idx = np.ones(len(s_ids), dtype=np.int32) * self.cfg["env"]["sampled_pose_idx"]
+                else:
+                    sampled_pose_idx = np.random.randint(self.saved_grasping_states[scale_key].shape[0], size=len(s_ids))
+                
+                sampled_pose = self.saved_grasping_states[scale_key][sampled_pose_idx].clone()
+                self.root_state_tensor[self.object_indices[s_ids], :7] = sampled_pose[:, 16:]
+                self.root_state_tensor[self.object_indices[s_ids], 7:13] = 0
+                pos = sampled_pose[:, :16]
+                self.leap_hand_dof_pos[s_ids, :] = pos
+                self.leap_hand_dof_vel[s_ids, :] = 0
+                self.prev_targets[s_ids, :self.num_leap_hand_dofs] = pos
+                self.cur_targets[s_ids, :self.num_leap_hand_dofs] = pos
+                self.init_pose_buf[s_ids, :] = pos.clone()
+                self.object_init_pose_buf[s_ids, :] = sampled_pose[:, 16:].clone()
+        else:
+            # Fixed scale training - use base_obj_scale for all environments
+            s_ids = env_ids
+            obj_scale = self.base_obj_scale
             scale_key = str(obj_scale)
             
             if "sampled_pose_idx" in self.cfg["env"]:
@@ -929,7 +958,8 @@ class LeapHandRot(VecTaskRot):
         self.object_type_list = []
         self.asset_files_dict = {
             'simple_tennis_ball': 'assets/ball.urdf',
-            'cube': 'assets/cube.urdf'
+            'cube': 'assets/cube.urdf',
+            'clear_spray_bottle_single': 'assets/clear_spray_bottle_single/clear_spray_bottle_single.urdf'
         }
         for p_id, prim in enumerate(primitive_list):
             if 'cuboid' in prim:

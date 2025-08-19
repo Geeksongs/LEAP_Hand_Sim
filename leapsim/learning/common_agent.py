@@ -130,6 +130,27 @@ class CommonAgent(a2c_continuous.A2CAgent):
                     fps_step = curr_frames / scaled_play_time
                     fps_total = curr_frames / scaled_time
                     print(f'fps step: {fps_step:.1f} fps total: {fps_total:.1f}')
+                    
+                    # Enhanced output: add play/update time breakdown and epoch info
+                    play_time = train_info.get('play_time', 0)
+                    update_time = train_info.get('update_time', 0) 
+                    if play_time > 0:
+                        fps_step_and_policy = curr_frames / play_time
+                        print(f'fps step: {fps_step:.0f} fps step and policy inference: {fps_step_and_policy:.0f} fps total: {fps_total:.0f} epoch: {epoch_num}/{self.max_epochs}')
+                    
+                    # Print timing information
+                    print(f'timing: play_time: {play_time:.3f}s update_time: {update_time:.3f}s total_time: {sum_time:.3f}s')
+                    
+                    # Print loss information
+                    if 'actor_loss' in train_info:
+                        a_loss = torch_ext.mean_list(train_info['actor_loss']).item()
+                        c_loss = torch_ext.mean_list(train_info['critic_loss']).item()
+                        print(f'losses: a_loss: {a_loss:.4f} c_loss: {c_loss:.4f}')
+                        
+                        # Additional training metrics
+                        if 'kl' in train_info:
+                            kl_div = torch_ext.mean_list(train_info['kl']).item()
+                            print(f'kl_divergence: {kl_div:.6f} lr: {self.last_lr:.6f} entropy_coef: {self.entropy_coef:.4f}')
 
                 self.writer.add_scalar('performance/total_fps', curr_frames / scaled_time, frame)
                 self.writer.add_scalar('performance/step_fps', curr_frames / scaled_play_time, frame)
@@ -141,6 +162,16 @@ class CommonAgent(a2c_continuous.A2CAgent):
                 if self.game_rewards.current_size > 0:
                     mean_rewards = self.game_rewards.get_mean()
                     mean_lengths = self.game_lengths.get_mean()
+                    
+                    # Print current mean rewards
+                    if self.print_stats:
+                        print(f'mean rewards: {mean_rewards}')
+                        
+                        # Enhanced reward information
+                        print(f'mean_rewards: {mean_rewards:.3f} mean_episode_length: {mean_lengths:.1f}')
+                        # Print best reward if available
+                        if hasattr(self, 'best_rewards'):
+                            print(f'best_rewards: {self.best_rewards:.3f}')
 
                     for i in range(self.value_size):
                         self.writer.add_scalar('rewards/frame'.format(i), mean_rewards[i], frame)

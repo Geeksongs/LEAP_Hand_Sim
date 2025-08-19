@@ -153,9 +153,8 @@ def launch_rlg_hydra(cfg: DictConfig):
         wandb.save(os.path.join(experiment_dir, 'LeapHandRotPPO.yaml'))
 
     if cfg.multi_gpu:
-        import horovod.torch as hvd
-
-        rank = hvd.rank()
+        # Use LOCAL_RANK from torchrun instead of horovod
+        rank = int(os.getenv("LOCAL_RANK", "0"))
     else:
         rank = 0
 
