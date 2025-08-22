@@ -65,6 +65,8 @@ def visualize_grasp(cfg: DictConfig):
         cfg.task.env.object.type = "clear_spray_bottle_single"
     elif "tuna_can" in cache_file or "tuna" in cache_file:
         cfg.task.env.object.type = "007_tuna_fish_can"
+    elif "scissors" in cache_file or "jiandao" in cache_file:
+        cfg.task.env.object.type = "037_scissors"
     
     # Set cache name from filename and extract scale
     cache_name = Path(cache_file).stem
