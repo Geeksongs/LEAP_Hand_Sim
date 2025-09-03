@@ -123,10 +123,39 @@ def visualize_grasp(cfg: DictConfig):
     
     # Just render loop without stepping policy
     obs = env.reset()
+    
+    # Initialize step counter
+    step_counter = 0
+    
     while True:
         # No actions - just hold the initial grasp pose
         zero_actions = torch.zeros((1, env.num_actions), device=env.device)
         obs, _, _, _ = env.step(zero_actions)
+        
+        # Print grasp information every 100 steps
+        if step_counter % 100 == 0:
+            env_id = 0  # Single environment
+            obj_pos = env.object_pos[env_id].cpu().numpy()
+            obj_quat = env.object_rot[env_id].cpu().numpy()
+            hand_dof = env.leap_hand_dof_pos[env_id].cpu().numpy()
+            
+            # Get hand position from root state tensor
+            hand_idx = env.hand_indices[env_id]
+            hand_pos = env.root_state_tensor[hand_idx, 0:3].cpu().numpy()
+            hand_quat = env.root_state_tensor[hand_idx, 3:7].cpu().numpy()
+            
+            print(f"\n=== Step {step_counter} ===")
+            print(f"Hand Position: [{hand_pos[0]:.4f}, {hand_pos[1]:.4f}, {hand_pos[2]:.4f}]")
+            print(f"Hand Quaternion: [{hand_quat[0]:.4f}, {hand_quat[1]:.4f}, {hand_quat[2]:.4f}, {hand_quat[3]:.4f}]")
+            print(f"Object Position: [{obj_pos[0]:.4f}, {obj_pos[1]:.4f}, {obj_pos[2]:.4f}]")
+            print(f"Object Quaternion: [{obj_quat[0]:.4f}, {obj_quat[1]:.4f}, {obj_quat[2]:.4f}, {obj_quat[3]:.4f}]")
+            print("Hand DOF Positions:")
+            print(f"  Index  finger: [{hand_dof[0]:.4f}, {hand_dof[1]:.4f}, {hand_dof[2]:.4f}, {hand_dof[3]:.4f}]")
+            print(f"  Middle finger: [{hand_dof[4]:.4f}, {hand_dof[5]:.4f}, {hand_dof[6]:.4f}, {hand_dof[7]:.4f}]")
+            print(f"  Ring   finger: [{hand_dof[8]:.4f}, {hand_dof[9]:.4f}, {hand_dof[10]:.4f}, {hand_dof[11]:.4f}]")
+            print(f"  Thumb        : [{hand_dof[12]:.4f}, {hand_dof[13]:.4f}, {hand_dof[14]:.4f}, {hand_dof[15]:.4f}]")
+        
+        step_counter += 1
         
         if env.viewer:
             # Check if window closed

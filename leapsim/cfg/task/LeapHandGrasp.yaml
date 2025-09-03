@@ -21,6 +21,7 @@ env:
   
   episodeLength: 50
   genGrasps: True
+  enableFullRotation: False  # Set to True for any grasp generation with full 3D rotations
 
   disable_actions: True
 

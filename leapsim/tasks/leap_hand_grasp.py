@@ -42,6 +42,12 @@ class LeapHandGrasp(LeapHandRot):
         if "grasp_cache_len" not in self.cfg["env"]:
             self.cfg["env"]["grasp_cache_len"] = 5e4
         
+        # Add support for full rotation
+        if "enableFullRotation" in cfg["env"]:
+            self.enable_full_rotation = cfg["env"]["enableFullRotation"]
+        else:
+            self.enable_full_rotation = False
+        
         self.x_unit_tensor = to_torch([1, 0, 0], dtype=torch.float, device=self.device).repeat((self.num_envs, 1))
         self.y_unit_tensor = to_torch([0, 1, 0], dtype=torch.float, device=self.device).repeat((self.num_envs, 1))
         self.z_unit_tensor = to_torch([0, 0, 1], dtype=torch.float, device=self.device).repeat((self.num_envs, 1))
@@ -79,6 +85,35 @@ class LeapHandGrasp(LeapHandRot):
         all_states = torch.cat([
             self.leap_hand_dof_pos, self.root_state_tensor[self.object_indices, :7]
         ], dim=1)
+        
+        # Print debug info for successful grasps
+        successful_envs = env_ids[success]
+        if len(successful_envs) > 0:
+            # Print info for the first successful grasp in this batch
+            env_id = successful_envs[0]
+            obj_pos = self.root_state_tensor[self.object_indices[env_id], 0:3].cpu().numpy()
+            obj_quat = self.root_state_tensor[self.object_indices[env_id], 3:7].cpu().numpy()
+            hand_dof = self.leap_hand_dof_pos[env_id].cpu().numpy()
+            
+            # Get hand (palm) position
+            hand_pos = self.root_state_tensor[self.hand_indices[env_id], 0:3].cpu().numpy()
+            hand_quat = self.root_state_tensor[self.hand_indices[env_id], 3:7].cpu().numpy()
+            
+            print(f"\n=== Step {self.progress_buf[env_id].item()} ===")
+            print(f"Hand Position: [{hand_pos[0]:.4f}, {hand_pos[1]:.4f}, {hand_pos[2]:.4f}]")
+            print(f"Hand Quaternion: [{hand_quat[0]:.4f}, {hand_quat[1]:.4f}, {hand_quat[2]:.4f}, {hand_quat[3]:.4f}]")
+            print(f"Object Position: [{obj_pos[0]:.4f}, {obj_pos[1]:.4f}, {obj_pos[2]:.4f}]")
+            print(f"Object Quaternion: [{obj_quat[0]:.4f}, {obj_quat[1]:.4f}, {obj_quat[2]:.4f}, {obj_quat[3]:.4f}]")
+            print("Hand DOF Positions:")
+            print(f"  Index  finger: [{hand_dof[0]:.4f}, {hand_dof[1]:.4f}, {hand_dof[2]:.4f}, {hand_dof[3]:.4f}]")
+            print(f"  Middle finger: [{hand_dof[4]:.4f}, {hand_dof[5]:.4f}, {hand_dof[6]:.4f}, {hand_dof[7]:.4f}]")
+            print(f"  Ring   finger: [{hand_dof[8]:.4f}, {hand_dof[9]:.4f}, {hand_dof[10]:.4f}, {hand_dof[11]:.4f}]")
+            print(f"  Thumb        : [{hand_dof[12]:.4f}, {hand_dof[13]:.4f}, {hand_dof[14]:.4f}, {hand_dof[15]:.4f}]")
+            
+            # Check if object is lying down
+            if self.enable_full_rotation:
+                print("Object orientation: Lying down")
+        
         self.saved_grasping_states = torch.cat([self.saved_grasping_states, all_states[env_ids][success]])
         print('current cache size:', self.saved_grasping_states.shape[0])
         if len(self.saved_grasping_states) >= self.cfg["env"]["grasp_cache_len"]:
@@ -90,9 +125,19 @@ class LeapHandGrasp(LeapHandRot):
         self.root_state_tensor[self.object_indices[env_ids]] = self.object_init_state[env_ids].clone()
         self.root_state_tensor[self.object_indices[env_ids], 0:2] = self.object_init_state[env_ids, 0:2]
         self.root_state_tensor[self.object_indices[env_ids], self.up_axis_idx] = self.object_init_state[env_ids, self.up_axis_idx]
-        new_object_rot = randomize_rotation(rand_floats[:, 3], rand_floats[:, 4], self.x_unit_tensor[env_ids], self.y_unit_tensor[env_ids])
-        new_object_rot[:] = 0
-        new_object_rot[:, -1] = 1
+        if self.enable_full_rotation:
+            # For mug lying down - rotate 90 degrees around X or Y axis, then add random rotation around Z
+            # This makes the mug lie horizontally with its length along the palm
+            base_rotation = randomize_rotation_lying_down(rand_floats[:, 3], rand_floats[:, 4], rand_floats[:, 5], 
+                                                         self.x_unit_tensor[env_ids], self.y_unit_tensor[env_ids], 
+                                                         self.z_unit_tensor[env_ids])
+            new_object_rot = base_rotation
+            print(f"DEBUG: Applied lying down rotation. enableFullRotation={self.enable_full_rotation}")
+        else:
+            # Original behavior - only XY rotation then reset to upright
+            new_object_rot = randomize_rotation(rand_floats[:, 3], rand_floats[:, 4], self.x_unit_tensor[env_ids], self.y_unit_tensor[env_ids])
+            new_object_rot[:] = 0
+            new_object_rot[:, -1] = 1
         self.root_state_tensor[self.object_indices[env_ids], 3:7] = new_object_rot
         self.root_state_tensor[self.object_indices[env_ids], 7:13] = torch.zeros_like(
             self.root_state_tensor[self.object_indices[env_ids], 7:13])
@@ -156,3 +201,27 @@ class LeapHandGrasp(LeapHandRot):
 @torch.jit.script
 def randomize_rotation(rand0, rand1, x_unit_tensor, y_unit_tensor):
     return quat_mul(quat_from_angle_axis(rand0 * np.pi, x_unit_tensor), quat_from_angle_axis(rand1 * np.pi, y_unit_tensor))
+
+@torch.jit.script
+def randomize_rotation_full(rand0, rand1, rand2, x_unit_tensor, y_unit_tensor, z_unit_tensor):
+    # Full 3D rotation by combining rotations around all three axes
+    quat_x = quat_from_angle_axis(rand0 * np.pi * 2.0, x_unit_tensor)
+    quat_y = quat_from_angle_axis(rand1 * np.pi * 2.0, y_unit_tensor)
+    quat_z = quat_from_angle_axis(rand2 * np.pi * 2.0, z_unit_tensor)
+    return quat_mul(quat_mul(quat_x, quat_y), quat_z)
+
+@torch.jit.script
+def randomize_rotation_lying_down(rand0, rand1, rand2, x_unit_tensor, y_unit_tensor, z_unit_tensor):
+    # Make mug lie down horizontally with very small variations
+    # First rotate 90 degrees around X axis to make it horizontal
+    quat_base = quat_from_angle_axis(torch.ones_like(rand0) * np.pi / 2.0, x_unit_tensor)
+    
+    # Only add random rotation around Z axis (yaw when lying down) - no tilts
+    quat_z = quat_from_angle_axis(rand2 * np.pi * 2.0, z_unit_tensor)
+    
+    # Very small random tilts for minimal variety (±5 degrees only)
+    quat_x_small = quat_from_angle_axis(rand0 * np.pi * 0.028, x_unit_tensor)  # ±5 degrees
+    quat_y_small = quat_from_angle_axis(rand1 * np.pi * 0.028, y_unit_tensor)  # ±5 degrees
+    
+    # Combine rotations: base horizontal, then tiny tilts, then Z rotation
+    return quat_mul(quat_mul(quat_mul(quat_base, quat_x_small), quat_y_small), quat_z)
