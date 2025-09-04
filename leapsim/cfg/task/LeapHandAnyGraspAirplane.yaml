@@ -1,10 +1,6 @@
 # --------------------------------------------------------
 # LEAP Hand: Low-Cost, Efficient, and Anthropomorphic Hand for Robot Learning
-# https://arxiv.org/abs/2309.06440
-# Copyright (c) 2023 Ananye Agarwal
-# Licensed under The MIT License [see LICENSE for details]
-# --------------------------------------------------------
-# Configuration for LeapHandAnyGrasp task
+# Task configuration for airplane grasp-to-pose training
 # --------------------------------------------------------
 
 # used to create the object
@@ -36,7 +32,7 @@ env:
   clipObservations: 5.0
   clipActions: 1.0
   reset_height_threshold: 0.4
-  grasp_cache_name: 'any_object_grasp_cache' # This must be supplied via command line
+  grasp_cache_name: 'airplane_any_grasp'
   grasp_cache_len: 1024
 
   # Random forces applied to the object
@@ -67,7 +63,7 @@ env:
   override_object_init_y: 0.04
 
   # Target pose from ground truth NPY file
-  target_gt_file: '/home/python/Desktop/LEAP_Hand_Sim/leapsim/ground_truth_data/mug_gt_data.npy'
+  target_gt_file: '/home/python/Desktop/LEAP_Hand_Sim/leapsim/ground_truth_data/airplane_any_gt_data.npy'
 
   canonical_pose:
     - 0.1458
@@ -88,7 +84,7 @@ env:
     - 0.1071
 
   num_contact_fingers: 0
-  baseObjScale: 1.0  # Default scale for any object
+  baseObjScale: 1.0
 
   randomization:
     # Randomization Property
@@ -121,7 +117,7 @@ env:
     enableObjFriction: True
 
   object:
-    type: '025_mug' # Default object, can be overridden via command line
+    type: '072_toy_airplane'
     sampleProb: [1.0]
 
   sim_to_real_indices: [1, 0, 2, 3, 9, 8, 10, 11, 13, 12, 14, 15, 4, 5, 6, 7]

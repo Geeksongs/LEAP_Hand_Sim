@@ -1,0 +1,264 @@
+task:
+  name: LeapHandAnyGrasp
+  physics_engine: ${..physics_engine}
+  on_evaluation: false
+  env:
+    numEnvs: ${resolve_default:16384,${...num_envs}}
+    numObservations: 102
+    numActions: 16
+    envSpacing: 0.25
+    phase_period: 2
+    exec_lag: 1
+    episodeLength: 400
+    enableDebugVis: false
+    aggregateMode: 1
+    controller:
+      torque_control: false
+      controlFrequencyInv: 6
+      pgain: 3
+      dgain: 0.1
+    genGrasps: false
+    clipObservations: 5.0
+    clipActions: 1.0
+    reset_height_threshold: 0.4
+    grasp_cache_name: mug_detailed_grasp
+    grasp_cache_len: 1024
+    forceScale: 10.0
+    randomForceProbScalar: 0.25
+    forceDecay: 0.9
+    forceDecayInterval: 0.08
+    reward:
+      angvelClipMin: -0.25
+      angvelClipMax: 0.25
+      rotateRewardScale: 0.0
+      objLinvelPenaltyScale: -0.1
+      poseDiffPenaltyScale: -0.05
+      torquePenaltyScale: -0.05
+      workPenaltyScale: -0.5
+    additional_rewards:
+      object_position_reward: 2.0
+      object_orientation_reward: 3.0
+      object_pose_reward: 5.0
+      hand_dof_reward: 1.5
+      object_fallen: -10
+      success_bonus: 10.0
+    override_object_init_z: 0.57
+    override_object_init_x: -0.03
+    override_object_init_y: 0.04
+    target_gt_file: /home/python/Desktop/LEAP_Hand_Sim/leapsim/ground_truth_data/mug_gt_data.npy
+    canonical_pose:
+    - 0.1458
+    - -1.047
+    - 1.7247
+    - -0.2187
+    - 1.2985
+    - 1.6139
+    - 0.9757
+    - 1.0728
+    - -0.1054
+    - 0.029
+    - 1.6039
+    - 0.1227
+    - -0.1084
+    - 0.9652
+    - 1.7317
+    - 0.1071
+    num_contact_fingers: 0
+    baseObjScale: 1.0
+    randomization:
+      randomizeMass: false
+      randomizeMassLower: 0.01
+      randomizeMassUpper: 0.25
+      randomizeCOM: false
+      randomizeCOMLower: -0.01
+      randomizeCOMUpper: 0.01
+      randomizeFriction: false
+      randomizeFrictionLower: 0.3
+      randomizeFrictionUpper: 3.0
+      randomizeScale: false
+      scaleListInit: false
+      randomizeScaleList:
+      - 0.95
+      - 0.9
+      - 1.0
+      - 1.05
+      - 1.1
+      randomizeScaleLower: 0.75
+      randomizeScaleUpper: 0.8
+      randomizePDGains: false
+      randomizePGainLower: 2.9
+      randomizePGainUpper: 3.1
+      randomizeDGainLower: 0.09
+      randomizeDGainUpper: 0.11
+    privInfo:
+      enableObjPos: true
+      enableObjScale: true
+      enableObjMass: true
+      enableObjCOM: true
+      enableObjFriction: true
+    object:
+      type: 025_mug
+      sampleProb:
+      - 1.0
+    sim_to_real_indices:
+    - 1
+    - 0
+    - 2
+    - 3
+    - 9
+    - 8
+    - 10
+    - 11
+    - 13
+    - 12
+    - 14
+    - 15
+    - 4
+    - 5
+    - 6
+    - 7
+    real_to_sim_indices:
+    - 1
+    - 0
+    - 2
+    - 3
+    - 12
+    - 13
+    - 14
+    - 15
+    - 5
+    - 4
+    - 6
+    - 7
+    - 9
+    - 8
+    - 10
+    - 11
+    asset:
+      handAsset: assets/leap_hand/robot.urdf
+    enableCameraSensors: false
+  sim:
+    dt: 0.0083333
+    substeps: 1
+    up_axis: z
+    use_gpu_pipeline: ${eq:${...pipeline},'gpu'}
+    gravity:
+    - 0.0
+    - 0.0
+    - -9.81
+    physx:
+      num_threads: ${....num_threads}
+      solver_type: ${....solver_type}
+      use_gpu: ${contains:'cuda',${....sim_device}}
+      num_position_iterations: 8
+      num_velocity_iterations: 0
+      max_gpu_contact_pairs: 8388608
+      num_subscenes: ${....num_subscenes}
+      contact_offset: 0.002
+      rest_offset: 0.0
+      bounce_threshold_velocity: 0.2
+      max_depenetration_velocity: 1000.0
+      default_buffer_size_multiplier: 5.0
+      contact_collection: 2
+train:
+  params:
+    seed: ${...seed}
+    algo:
+      name: a2c_continuous
+    model:
+      name: continuous_a2c_logstd
+    network:
+      name: actor_critic
+      separate: false
+      space:
+        continuous:
+          mu_activation: None
+          sigma_activation: None
+          mu_init:
+            name: default
+          sigma_init:
+            name: const_initializer
+            val: 0
+          fixed_sigma: true
+      mlp:
+        units:
+        - 512
+        - 512
+        - 256
+        - 128
+        activation: elu
+        d2rl: false
+        initializer:
+          name: default
+        regularizer:
+          name: None
+    load_checkpoint: ${if:${...checkpoint},True,False}
+    load_path: ${...checkpoint}
+    config:
+      name: ${resolve_default:LeapHandAnyGrasp,${....experiment}}
+      full_experiment_name: LeapHandAnyGrasp_2025-09-03_16-32-13
+      env_name: rlgpu
+      ppo: true
+      mixed_precision: true
+      normalize_input: true
+      normalize_value: true
+      value_bootstrap: true
+      num_actors: ${....task.env.numEnvs}
+      reward_shaper:
+        scale_value: 1.0
+      normalize_advantage: true
+      gamma: 0.998
+      tau: 0.95
+      learning_rate: 0.001
+      lr_schedule: adaptive
+      kl_threshold: 0.016
+      score_to_win: 100000
+      max_epochs: ${resolve_default:1000,${....max_iterations}}
+      save_best_after: 50
+      save_frequency: 100
+      print_stats: true
+      grad_norm: 1.0
+      entropy_coef: 0.0
+      truncate_grads: false
+      e_clip: 0.2
+      horizon_length: 8
+      minibatch_size: 8192
+      mini_epochs: 8
+      critic_coef: 2
+      clip_value: true
+      seq_length: 4
+      bounds_loss_coef: 0.0001
+      player:
+        deterministic: true
+        games_num: 100000
+        print_stats: false
+task_name: ${task.name}
+experiment: ''
+num_envs: 1
+seed: 42
+torch_deterministic: false
+max_iterations: ''
+physics_engine: physx
+pipeline: gpu
+sim_device: cuda:0
+rl_device: cuda:0
+graphics_device_id: 0
+num_threads: 4
+solver_type: 1
+num_subscenes: 4
+test: true
+checkpoint: /home/python/Desktop/LEAP_Hand_Sim/leapsim/runs/LeapHandAnyGrasp_2025-09-03_16-13-11/nn/LeapHandAnyGrasp.pth
+multi_gpu: false
+default_run_name: ${train.params.config.name}
+log_to_sheet: true
+sheet_name: leap-hand-manip
+creds_path: ~/creds.json
+wandb_activate: false
+wandb_group: ''
+wandb_entity: wandb_username
+wandb_project: leap_sim
+capture_video: false
+capture_video_freq: 183
+capture_video_len: 100
+force_render: true
+headless: false

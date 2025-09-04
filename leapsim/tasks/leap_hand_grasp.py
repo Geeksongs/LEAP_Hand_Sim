@@ -39,14 +39,14 @@ class LeapHandGrasp(LeapHandRot):
         else:
             self.finger_dist_threshold = 0.1
             
-        if "grasp_cache_len" not in self.cfg["env"]:
-            self.cfg["env"]["grasp_cache_len"] = 5e4
-        
         # Add support for full rotation
         if "enableFullRotation" in cfg["env"]:
             self.enable_full_rotation = cfg["env"]["enableFullRotation"]
         else:
             self.enable_full_rotation = False
+            
+        if "grasp_cache_len" not in self.cfg["env"]:
+            self.cfg["env"]["grasp_cache_len"] = 5e4
         
         self.x_unit_tensor = to_torch([1, 0, 0], dtype=torch.float, device=self.device).repeat((self.num_envs, 1))
         self.y_unit_tensor = to_torch([0, 1, 0], dtype=torch.float, device=self.device).repeat((self.num_envs, 1))
@@ -114,7 +114,24 @@ class LeapHandGrasp(LeapHandRot):
             if self.enable_full_rotation:
                 print("Object orientation: Lying down")
         
-        self.saved_grasping_states = torch.cat([self.saved_grasping_states, all_states[env_ids][success]])
+        # Filter out forbidden orientations before saving
+        successful_states = all_states[env_ids][success]
+        if len(successful_states) > 0 and not self.enable_full_rotation:
+            # Check quaternion Z components for successful grasps
+            obj_quats = successful_states[:, 19:23]  # Object quaternion is at indices 19:23
+            forbidden_mask = (obj_quats[:, 2] < -0.05) & (obj_quats[:, 2] > -0.50)
+            
+            # Only keep grasps that are NOT in forbidden range
+            valid_mask = ~forbidden_mask
+            if valid_mask.any():
+                valid_states = successful_states[valid_mask]
+                self.saved_grasping_states = torch.cat([self.saved_grasping_states, valid_states])
+                if forbidden_mask.any():
+                    print(f"DEBUG: Filtered out {forbidden_mask.sum()} grasps with forbidden orientations")
+            else:
+                print("DEBUG: All successful grasps were in forbidden orientation range, none saved")
+        else:
+            self.saved_grasping_states = torch.cat([self.saved_grasping_states, successful_states])
         print('current cache size:', self.saved_grasping_states.shape[0])
         if len(self.saved_grasping_states) >= self.cfg["env"]["grasp_cache_len"]:
             name = f'cache/{self.grasp_cache_name}_grasp_50k_s{str(self.base_obj_scale).replace(".", "")}.npy'
@@ -134,10 +151,23 @@ class LeapHandGrasp(LeapHandRot):
             new_object_rot = base_rotation
             print(f"DEBUG: Applied lying down rotation. enableFullRotation={self.enable_full_rotation}")
         else:
-            # Original behavior - only XY rotation then reset to upright
-            new_object_rot = randomize_rotation(rand_floats[:, 3], rand_floats[:, 4], self.x_unit_tensor[env_ids], self.y_unit_tensor[env_ids])
-            new_object_rot[:] = 0
-            new_object_rot[:, -1] = 1
+            # Only Z-axis rotation (yaw) - object stays upright but can rotate in XY plane
+            # Generate random Z-axis rotation, but avoid problematic range where z component is negative
+            angles = rand_floats[:, 5] * np.pi * 2.0  # 0 to 2π
+            
+            # Avoid angles that produce negative Z quaternion component (like -0.2957)
+            # This typically happens around π ± π/6, so avoid range [π-π/3, π+π/3]
+            forbidden_center = np.pi
+            forbidden_width = np.pi / 3
+            forbidden_start = forbidden_center - forbidden_width
+            forbidden_end = forbidden_center + forbidden_width
+            
+            # If angle falls in forbidden range, map it to allowed range
+            mask = (angles >= forbidden_start) & (angles <= forbidden_end)
+            # Map forbidden range to first half of allowed range
+            angles[mask] = (angles[mask] - forbidden_start) / (forbidden_end - forbidden_start) * forbidden_start
+            
+            new_object_rot = quat_from_angle_axis(angles, self.z_unit_tensor[env_ids])
         self.root_state_tensor[self.object_indices[env_ids], 3:7] = new_object_rot
         self.root_state_tensor[self.object_indices[env_ids], 7:13] = torch.zeros_like(
             self.root_state_tensor[self.object_indices[env_ids], 7:13])
@@ -192,7 +222,20 @@ class LeapHandGrasp(LeapHandRot):
         # 0.645 for internal leap
         # 0.625 for public leap
         cond3 = torch.greater(obj_pos[:, -1, -1], self.reset_z_threshold)
-        cond = cond1.float() * cond2.float() * cond3.float()
+        
+        # 4) For normal grasp (not full rotation), forbid specific orientation range
+        cond4 = torch.ones_like(cond3)
+        if not self.enable_full_rotation:
+            # Get current object quaternions
+            obj_quat = self.root_state_tensor[self.object_indices, 3:7]
+            # Check if Z component is in forbidden range (around -0.25 to -0.35)
+            forbidden_mask = (obj_quat[:, 2] < -0.05) & (obj_quat[:, 2] > -0.50)  # Wider range
+            cond4[forbidden_mask] = 0.0
+            # Debug output
+            if forbidden_mask.any():
+                print(f"DEBUG: Rejected grasp due to forbidden orientation. Z values: {obj_quat[forbidden_mask, 2]}")
+            
+        cond = cond1.float() * cond2.float() * cond3.float() * cond4.float()
         # reset if any of the above condition does not hold
         self.reset_buf[cond < 1] = 1
         self.reset_buf[self.progress_buf >= self.max_episode_length] = 1

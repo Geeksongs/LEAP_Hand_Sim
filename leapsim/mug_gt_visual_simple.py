@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-Simple visualization of target pose for mug grasping task
+Simple visualization of target pose for any grasping task
+Usage: python mug_gt_visual_simple.py <grasp_file.npy>
 """
 
 import sys
@@ -17,21 +18,58 @@ from isaacgym import gymtorch
 
 # No torch imports needed for this simple visualization
 
-# Target pose configuration
+# Check command line arguments
+if len(sys.argv) < 2:
+    print("Usage: python mug_gt_visual_simple.py <grasp_file.npy>")
+    sys.exit(1)
+
+# Load grasp data from NPY file
+grasp_file = sys.argv[1]
+grasp_data = np.load(grasp_file, allow_pickle=True)
+
+print(f"Loaded grasp data from {grasp_file}")
+print(f"Data shape: {grasp_data.shape}")
+
+# Extract data from NPY file (format: 16 DOFs + 3 pos + 4 quat)
+if grasp_data.shape == (23,):
+    # Single grasp
+    TARGET_HAND_DOF = grasp_data[0:16].tolist()
+    TARGET_OBJECT_POS = grasp_data[16:19].tolist()
+    TARGET_OBJECT_QUAT = grasp_data[19:23].tolist()
+elif len(grasp_data.shape) == 2 and grasp_data.shape[1] == 23:
+    # Multiple grasps - use the first one
+    TARGET_HAND_DOF = grasp_data[0, 0:16].tolist()
+    TARGET_OBJECT_POS = grasp_data[0, 16:19].tolist()
+    TARGET_OBJECT_QUAT = grasp_data[0, 19:23].tolist()
+    print(f"Multiple grasps found, using grasp 0")
+else:
+    print(f"Unknown data format: {grasp_data.shape}")
+    sys.exit(1)
+
+# Default hand pose (can be overridden by command line in future)
 TARGET_HAND_POS = [0.0000, 0.0000, 0.5000]
 TARGET_HAND_QUAT = [1.0000, 0.0000, -0.0000, -0.0000]  # [x, y, z, w]
-TARGET_OBJECT_POS = [-0.0064, 0.0074, 0.5502]
-TARGET_OBJECT_QUAT = [-0.4084, 0.3883, 0.1063, 0.8192]  # [x, y, z, w]
-TARGET_HAND_DOF = [
-    # Index finger
-    0.1666, -1.0033, 1.6278, -0.3558,
-    # Middle finger  
-    1.5747, 1.5348, 0.9071, 0.8591,
-    # Ring finger
-    -0.2930, -0.0972, 1.4900, 0.0998,
-    # Thumb
-    -0.1605, 0.9130, 1.6006, 0.3372
-]
+
+# Auto-detect object type from filename
+if "mug" in grasp_file:
+    OBJECT_TYPE = "025_mug"
+    OBJECT_ASSET = "025_mug.urdf"
+elif "airplane" in grasp_file:
+    OBJECT_TYPE = "072_toy_airplane" 
+    OBJECT_ASSET = "072_toy_airplane.urdf"
+elif "meat" in grasp_file:
+    OBJECT_TYPE = "010_potted_meat_can"
+    OBJECT_ASSET = "010_potted_meat_can.urdf"
+elif "tuna" in grasp_file:
+    OBJECT_TYPE = "007_tuna_fish_can"
+    OBJECT_ASSET = "007_tuna_fish_can.urdf"
+elif "scissors" in grasp_file:
+    OBJECT_TYPE = "037_scissors"
+    OBJECT_ASSET = "037_scissors.urdf"
+else:
+    # Default to mug
+    OBJECT_TYPE = "025_mug"
+    OBJECT_ASSET = "025_mug.urdf"
 
 def visualize_target_pose():
     # Initialize gym
@@ -94,15 +132,14 @@ def visualize_target_pose():
         gym.destroy_sim(sim)
         return
     
-    # Load mug asset
-    mug_asset_file = "025_mug.urdf"
-    mug_asset_options = gymapi.AssetOptions()
+    # Load object asset
+    object_asset_options = gymapi.AssetOptions()
     
-    print(f"Loading mug asset from {asset_root}/{mug_asset_file}")
-    mug_asset = gym.load_asset(sim, asset_root, mug_asset_file, mug_asset_options)
+    print(f"Loading {OBJECT_TYPE} asset from {asset_root}/{OBJECT_ASSET}")
+    object_asset = gym.load_asset(sim, asset_root, OBJECT_ASSET, object_asset_options)
     
-    if mug_asset is None:
-        print("Failed to load mug asset!")
+    if object_asset is None:
+        print(f"Failed to load {OBJECT_TYPE} asset!")
         gym.destroy_viewer(viewer)
         gym.destroy_sim(sim)
         return
@@ -117,15 +154,15 @@ def visualize_target_pose():
     
     hand_actor = gym.create_actor(env, hand_asset, hand_pose, "hand", 0, 0)
     
-    # Create mug actor
-    mug_pose = gymapi.Transform()
-    mug_pose.p = gymapi.Vec3(TARGET_OBJECT_POS[0], TARGET_OBJECT_POS[1], TARGET_OBJECT_POS[2])
+    # Create object actor
+    object_pose = gymapi.Transform()
+    object_pose.p = gymapi.Vec3(TARGET_OBJECT_POS[0], TARGET_OBJECT_POS[1], TARGET_OBJECT_POS[2])
     # Normalize quaternion
     quat_norm = np.linalg.norm(TARGET_OBJECT_QUAT)
     normalized_quat = [q/quat_norm for q in TARGET_OBJECT_QUAT]
-    mug_pose.r = gymapi.Quat(normalized_quat[0], normalized_quat[1], normalized_quat[2], normalized_quat[3])
+    object_pose.r = gymapi.Quat(normalized_quat[0], normalized_quat[1], normalized_quat[2], normalized_quat[3])
     
-    mug_actor = gym.create_actor(env, mug_asset, mug_pose, "mug", 1, 0)
+    object_actor = gym.create_actor(env, object_asset, object_pose, OBJECT_TYPE, 1, 0)
     
     # Set hand DOF positions
     num_hand_dofs = gym.get_asset_dof_count(hand_asset)

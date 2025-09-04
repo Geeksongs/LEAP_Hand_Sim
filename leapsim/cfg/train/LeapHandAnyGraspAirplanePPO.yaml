@@ -1,0 +1,3 @@
+# PPO configuration for LeapHandAnyGraspAirplane
+defaults:
+  - LeapHandAnyGraspPPO

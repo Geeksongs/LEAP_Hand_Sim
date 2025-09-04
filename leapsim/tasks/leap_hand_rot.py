@@ -963,7 +963,8 @@ class LeapHandRot(VecTaskRot):
             '007_tuna_fish_can': 'assets/007_tuna_fish_can.urdf',
             '037_scissors': 'assets/037_scissors.urdf',
             '010_potted_meat_can': 'assets/010_potted_meat_can.urdf',
-            '025_mug': 'assets/025_mug.urdf'
+            '025_mug': 'assets/025_mug.urdf',
+            '072_toy_airplane': 'assets/072_toy_airplane.urdf'
         }
         for p_id, prim in enumerate(primitive_list):
             if 'cuboid' in prim:
