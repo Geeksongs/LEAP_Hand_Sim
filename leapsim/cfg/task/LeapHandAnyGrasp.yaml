@@ -15,7 +15,7 @@ on_evaluation: False
 env:
   # environment basic
   numEnvs: ${resolve_default:16384,${...num_envs}}
-  numObservations: 102
+  numObservations: 106  # 102 + 4 binary tactile values (fingertips)
   numActions: 16
   envSpacing: 0.25
   phase_period: 2
@@ -36,6 +36,7 @@ env:
   clipObservations: 5.0
   clipActions: 1.0
   reset_height_threshold: 0.4
+  include_tactile: True  # Enable binary tactile sensing
   grasp_cache_name: 'any_object_grasp_cache' # This must be supplied via command line
   grasp_cache_len: 1024
 

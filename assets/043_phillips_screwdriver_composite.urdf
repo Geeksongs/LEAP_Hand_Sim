@@ -1,0 +1,52 @@
+<?xml version="1.0"?>
+<robot name="043_phillips_screwdriver_composite">
+  <link name="object">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <!-- Handle from original mesh -->
+        <mesh filename="/home/python/Desktop/LEAP_Hand_Sim/assets/043_phillips_screwdriver_berkeley_meshes/043_phillips_screwdriver/poisson/nontextured.stl" scale="1.0 1.0 1.0"/>
+      </geometry>
+      <material name="handle_material">
+        <color rgba="0.6 0.3 0.1 1.0"/>
+      </material>
+    </visual>
+
+    <!-- Add blade as a separate visual element -->
+    <visual name="blade">
+      <origin xyz="-0.002 0.005 0.15" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="0.003" length="0.12"/>
+      </geometry>
+      <material name="blade_material">
+        <color rgba="0.8 0.8 0.8 1.0"/>
+      </material>
+    </visual>
+
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="/home/python/Desktop/LEAP_Hand_Sim/assets/043_phillips_screwdriver_berkeley_meshes/043_phillips_screwdriver/poisson/nontextured.stl" scale="1.0 1.0 1.0"/>
+      </geometry>
+    </collision>
+
+    <!-- Add blade collision -->
+    <collision name="blade_collision">
+      <origin xyz="-0.002 0.005 0.15" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="0.003" length="0.12"/>
+      </geometry>
+    </collision>
+
+    <inertial>
+      <origin xyz="0 0 0.12" rpy="0 0 0"/>
+      <mass value="0.12" />
+      <!-- Inertia tensor for composite screwdriver with heavier metal blade -->
+      <!-- Mass center shifted toward blade due to steel being ~6x denser than plastic handle -->
+      <inertia 
+        ixx="0.0012" ixy="0.0" ixz="0.0" 
+        iyy="0.0012" iyz="0.0" 
+        izz="0.00003"/>
+    </inertial>
+  </link>
+</robot>

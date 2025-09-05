@@ -77,6 +77,60 @@ class LeapHandAnyGrasp(LeapHandRot):
         
         return combined_reward
     
+    def _find_fingertip_indices(self):
+        """Find the rigid body indices for fingertips by name matching"""
+        if hasattr(self, '_fingertip_indices'):
+            return self._fingertip_indices
+            
+        # Get rigid body names for the hand asset
+        body_names = []
+        for i in range(self.gym.get_asset_rigid_body_count(self.hand_asset)):
+            body_name = self.gym.get_asset_rigid_body_name(self.hand_asset, i)
+            body_names.append(body_name)
+            
+        print(f"DEBUG: All hand rigid body names: {body_names}")
+        
+        # Find fingertip indices by name matching
+        fingertip_names = ['fingertip', 'fingertip_2', 'fingertip_3', 'thumb_fingertip']
+        self._fingertip_indices = []
+        
+        for tip_name in fingertip_names:
+            if tip_name in body_names:
+                idx = body_names.index(tip_name)
+                self._fingertip_indices.append(idx)
+                print(f"DEBUG: Found {tip_name} at body index {idx}")
+            else:
+                print(f"WARNING: Could not find rigid body '{tip_name}'")
+        
+        print(f"DEBUG: Final fingertip indices: {self._fingertip_indices}")
+        return self._fingertip_indices
+
+    def compute_observations(self):
+        """Override parent's compute_observations to add tactile sensing"""
+        # Call parent method to get base observations
+        super().compute_observations()
+        
+        # Add binary tactile sensing for fingertips if enabled
+        if self.cfg["env"].get("include_tactile", False):
+            # Get the correct fingertip body indices
+            fingertip_indices = self._find_fingertip_indices()
+            
+            if len(fingertip_indices) == 4:
+                tactile_binary = []
+                
+                for fingertip_idx in fingertip_indices:
+                    # Check if contact force magnitude exceeds threshold (binary touch)
+                    contact_force_mag = torch.norm(self.contact_forces[:, fingertip_idx], dim=-1)
+                    touch_binary = (contact_force_mag > 0.1).float()  # 0.1N threshold
+                    tactile_binary.append(touch_binary.unsqueeze(-1))
+                
+                tactile_tensor = torch.cat(tactile_binary, dim=-1).unsqueeze(1)  # Shape: [num_envs, 1, 4]
+                
+                # Append tactile data to the last dimension of obs_buf
+                self.obs_buf = torch.cat([self.obs_buf, tactile_tensor.squeeze(1)], dim=-1)
+            else:
+                print(f"WARNING: Expected 4 fingertips, found {len(fingertip_indices)}. Tactile sensing disabled.")
+    
     def reward_hand_dof_reward(self):
         """Dense reward for hand DOF positions - closer to target gets higher reward"""
         target_dof = self.target_hand_dof.unsqueeze(0).expand(self.num_envs, -1)

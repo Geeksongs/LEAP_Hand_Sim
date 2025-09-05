@@ -69,6 +69,8 @@ def visualize_grasp(cfg: DictConfig):
         cfg.task.env.object.type = "037_scissors"
     elif "meat_can" in cache_file or "meat" in cache_file:
         cfg.task.env.object.type = "010_potted_meat_can"
+    elif "screwdriver" in cache_file or "driver" in cache_file:
+        cfg.task.env.object.type = "043_phillips_screwdriver"
     elif "mug" in cache_file:
         cfg.task.env.object.type = "025_mug"
     elif "airplane" in cache_file:

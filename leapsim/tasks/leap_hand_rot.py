@@ -964,6 +964,7 @@ class LeapHandRot(VecTaskRot):
             '037_scissors': 'assets/037_scissors.urdf',
             '010_potted_meat_can': 'assets/010_potted_meat_can.urdf',
             '025_mug': 'assets/025_mug.urdf',
+            '043_phillips_screwdriver': 'assets/043_phillips_screwdriver_composite.urdf',
             '072_toy_airplane': 'assets/072_toy_airplane.urdf'
         }
         for p_id, prim in enumerate(primitive_list):
@@ -1084,6 +1085,15 @@ class LeapHandRot(VecTaskRot):
 
         if "override_object_init_z" in self.cfg["env"]:
             object_start_pose.p.z = self.cfg["env"]["override_object_init_z"] 
+        
+        # Support for initial object rotation override
+        if "override_object_init_quat_w" in self.cfg["env"]:
+            object_start_pose.r = gymapi.Quat(
+                self.cfg["env"].get("override_object_init_quat_x", 0.0),
+                self.cfg["env"].get("override_object_init_quat_y", 0.0), 
+                self.cfg["env"].get("override_object_init_quat_z", 0.0),
+                self.cfg["env"].get("override_object_init_quat_w", 1.0)
+            )
 
         return leap_hand_start_pose, object_start_pose
 
