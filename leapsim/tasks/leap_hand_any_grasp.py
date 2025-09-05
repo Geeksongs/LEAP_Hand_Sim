@@ -107,29 +107,9 @@ class LeapHandAnyGrasp(LeapHandRot):
 
     def compute_observations(self):
         """Override parent's compute_observations to add tactile sensing"""
-        # Call parent method to get base observations
+        # Disable tactile sensing temporarily to avoid tensor size issues
+        # Just call parent method for now
         super().compute_observations()
-        
-        # Add binary tactile sensing for fingertips if enabled
-        if self.cfg["env"].get("include_tactile", False):
-            # Get the correct fingertip body indices
-            fingertip_indices = self._find_fingertip_indices()
-            
-            if len(fingertip_indices) == 4:
-                tactile_binary = []
-                
-                for fingertip_idx in fingertip_indices:
-                    # Check if contact force magnitude exceeds threshold (binary touch)
-                    contact_force_mag = torch.norm(self.contact_forces[:, fingertip_idx], dim=-1)
-                    touch_binary = (contact_force_mag > 0.1).float()  # 0.1N threshold
-                    tactile_binary.append(touch_binary.unsqueeze(-1))
-                
-                tactile_tensor = torch.cat(tactile_binary, dim=-1).unsqueeze(1)  # Shape: [num_envs, 1, 4]
-                
-                # Append tactile data to the last dimension of obs_buf
-                self.obs_buf = torch.cat([self.obs_buf, tactile_tensor.squeeze(1)], dim=-1)
-            else:
-                print(f"WARNING: Expected 4 fingertips, found {len(fingertip_indices)}. Tactile sensing disabled.")
     
     def reward_hand_dof_reward(self):
         """Dense reward for hand DOF positions - closer to target gets higher reward"""
